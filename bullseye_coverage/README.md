@@ -176,21 +176,21 @@ md %buildDir% %reportsDir% >NUL 2>&1
 ```cmd
 cov01 -q --push
 ```
-### optional clean
+### clean build
+reasons:
+- coverage file does not exist
+- option -c
 ```cmd
-if "%1" == "-c" (
-    %vsCall% -t:Clean
+set clean=0
+if not exist %covfile% set clean=1
+if "%1" == "-c" set clean=1
+
+if %clean% == 1 (
     DEL /Q %covfile% >NUL 2>&1
+    %vsCall% -t:Clean
 )
 ```
 ### build
-- without instrumentation
-```cmd
-cov01 -q --off
-%vsCall% -t:testenv
-if %errorlevel% NEQ 0 goto err 
-```
-- with instrumentation
 ```cmd
 cov01 -q --on
 %vsCall% -t:"moduletests,moduletestsIL"
