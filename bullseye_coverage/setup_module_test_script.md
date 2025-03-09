@@ -326,6 +326,7 @@ set vsCall=msbuild -m %vsSolution% -p:configuration=bullseye
 set elevel=0
 
 md %buildDir% %reportsDir% >NUL 2>&1
+DEL /Q %report% %todoTxt% >NUL 2>&1
 
 cov01 -q --push
 
@@ -369,7 +370,6 @@ exit /b %elevel%
 :err
 set elevel=1
 goto end
-
 ```
 -   the exclude file
 ```
