@@ -37,9 +37,15 @@ repo
 ```
 ## requirements
 ### general
--   return code of script (e.g. for Jenkins pipeline success)
-    - 0 (OK) if desired coverage reached
-    - 1 (NOK) otherwise
+#### development
+Script must enable incremental test development without permanent clean builds.
+-   implement
+-   run script
+-   view results in coverage browser
+#### pipelines e.g. Jenkins
+Return code of script must mirror if desired coverage reached. 
+    - 0 desired coverage reached
+    - 1 otherwise
 ### for this sample
 -   code coverage required for
 ```
@@ -83,7 +89,7 @@ repo
 |   `-- testmain
 |       `-- testMain.cpp
 ```
-## setting up the script
+## setting up the script step by step
 
 ### setup
 - determine relevant directories
@@ -136,6 +142,7 @@ set elevel=0
 - msbuild call
     - could be called with any configuration
     - separating instrumented and non instrumented builds saves a lot of clean builds
+    - see [remarks](##remarks)
 ```cmd
 set vsCall=msbuild -m %vsSolution% -p:configuration=bullseye
 ```
@@ -196,7 +203,7 @@ for %%t in (moduletests moduletestsIL) do (
 ```cmd
 covselect -qd --import %excludeFile%
 ```
--   change directory to coverage file location 
+-   change directory to coverage file location (see [remarks](##remarks))
 ```cmd
 cd %buildDir%
 ```
@@ -376,4 +383,37 @@ goto end
 exclude all /
 include folder application/
 include folder specification/
+```
+## remarks
+### decent relative paths output
+Bullseye output is a bit tricky to handle.
+
+To achieve decent paths output with covdir or covsrc
+- change dir to coverage file location (as in our script)
+```cmd
+cd %buildDir%
+covdir -q --by-name > %report%
+```
+- or change dir to application root (as set with %COVCOPT%) and use --srcdir .
+```cmd
+cd %repoDir%
+covdir -q --by-name --srcdir . > %report%
+```
+### separation of binaries
+Using premake5 to generate the solutions separation can be achieved like this.
+```lua
+workspace 'DSTW'
+    configurations { 'ci', 'debug', 'memleak', 'bullseye', 'fail' }
+    language 'C++'
+    -- ../build/windows/obj/bullseye/
+    -- (config automatically added for objdir)
+    objdir  '../build/%{_TARGET_OS}/obj'
+    -- ../build/windows/lib/bullseye/
+    libdirs { '../build/%{_TARGET_OS}/lib/%{cfg.name}' }
+    filter { 'kind:ConsoleApp' }
+        -- ../build/windows/bullseye/
+        targetdir '../build/%{_TARGET_OS}/%{cfg.name}'
+    filter { 'kind:StaticLib' }
+        -- ../build/windows/lib/bullseye/
+        targetdir '../build/%{_TARGET_OS}/lib/%{cfg.name}'
 ```
