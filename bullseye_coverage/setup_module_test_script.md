@@ -333,12 +333,10 @@ set clean=0
 if not exist %covfile% set clean=1
 if "%1" == "-c" set clean=1
 if %clean% == 1 (
-    echo - clean
     %vsCall% -t:Clean
     DEL /Q %covfile% >NUL 2>&1
 )
 
-echo -build
 cov01 -q --on
 %vsCall% -t:"moduletests,moduletestsIL"
 if %errorlevel% NEQ 0 goto err
@@ -348,14 +346,12 @@ if not exist %covfile% (
     goto err
 )
 
-echo - run
 covclear -q
 for %%t in (moduletests moduletestsIL) do (
     %exeDir%\%%t.exe
     if %errorlevel% NEQ 0 goto err
 )
 
-echo - report
 covselect -qd --import %excludeFile%
 
 cd %buildDir%
