@@ -5,7 +5,7 @@ Windows CMD sample
 -   install MS build tools or Visual Studio
 -   and then install Bullseye coverage
 
-## sample project _DSTW_
+## sample project _DSTW98_
 ```
 repo
 |-- specification
@@ -16,20 +16,23 @@ repo
 |
 |-- testing
 |   |-- testenv
-|   |-- tests
-|   |   |-- moduletests
-|   |   |-- moduletestsIL
-|   |   `-- systemtests
-|   `-- testmain
-|       `-- testMain.cpp
+|   `-- tests
+|       |-- moduletests
+|       |-- moduletestsIL
+|       `-- systemtests
 |
-|-- make
-|   |-- coverage
-|   |   `-- coverage.cmd (our script)
+|-- scripts
+|   `-- coverage
+|       |-- moduletests.cmd (our script)
+|       `-- exclude.txt
 |
 |-- submodules
 |   |-- CppUTestSteps
 |   `-- cpputest
+|
+|-- vs
+|   |-- DSTW.sln
+|   `-- *.vcxporj
 |
 | temporary:
 |-- build
@@ -38,14 +41,18 @@ repo
 ## requirements
 ### general
 #### development
-Script must enable incremental test development without permanent clean builds.
--   implement
--   run script
--   view results in coverage browser
+-   Script must enable incremental test development without permanent clean builds.
+    -   implement
+    -   run script
+    -   view results in coverage browser
+-   instrumentation state should not be changed after script run    
 #### pipelines e.g. Jenkins
-Return code of script must mirror if desired coverage reached. 
+-   Return code of script must mirror if desired coverage reached. 
     - 0 desired coverage reached
     - 1 otherwise
+-  A minimal text based reporting to be saved as artifact might be provided:
+	- coverage overview
+	- todo report
 ### for this sample
 -   code coverage required for
 ```
@@ -54,40 +61,37 @@ Return code of script must mirror if desired coverage reached.
 |   `-- components
 ```
 -   Two different test runs required for full coverage
+	-  moduletests (with mocked interface locator)
+	- moduletestsIL (to test the production interface locator)
 
 ## sample ms build solution _DSTW.sln_
-- testenv.vcxproj - static lib
+- submodules.vcxproj - static lib
 ```
-|-- testing
-|   `-- testenv
-|
 |-- submodules
 |   |-- CppUTestSteps
 |   `-- cpputest
 ```
-- moduletests.vcxproj - console app using testenv.lib
+- moduletests.vcxproj - console app using submodules.lib
 ```
 |-- specification
 |-- application
 |   `-- components
 |
 |-- testing
-|   |-- tests
-|   |   `-- moduletests
-|   `-- testmain
-|       `-- testMain.cpp
+|   |-- testenv
+|   `-- tests
+|       `-- moduletests
 ```
-- moduletestsIL.vcxproj - console app using testenv.lib
+- moduletestsIL.vcxproj - console app using submodules.lib
 ```
 |-- specification
 |-- application
 |   `-- components
 |
 |-- testing
-|   |-- tests
-|   |   `-- moduletestsIL
-|   `-- testmain
-|       `-- testMain.cpp
+|   |-- testenv
+|   `-- tests
+|       `-- moduletestsIL
 ```
 ## setting up the script step by step
 
@@ -98,26 +102,25 @@ Return code of script must mirror if desired coverage reached.
 SETLOCAL
 cd /d %~dp0
 set myDir=%cd%
-cd ..
-set makeDir=%cd%
-cd ..
+cd ../..
 set repoDir=%cd%
-set buildDir=%cd%\build
-set reportsDir=%cd%\reports
+set buildDir=%repoDir%\build
+set reportsDir=%repoDir%\reports
+set vsDir=%repoDir%\vs
 set exeDir=%buildDir%\windows\bullseye
 ```
 - solution and reporting files
 
 ```cmd
-set vsSolution=%makeDir%\DSTW.sln
-set report=%reportsDir%\coverage.txt
-set todoTxt=%reportsDir%\todo.txt
+set vsSolution=%vsDir%\DSTW.sln
+set report=%reportsDir%\moduletests_coverage.txt
+set todoTxt=%reportsDir%\moduletests_todo.txt
 ```
 -   Bullseye coverage file: %COVFILE% 
     -   can have any name
     -   extension _.cov_ makes sense - since assigned to coverage browser
 ```cmd
-set covfile=%buildDir%\coverage.cov
+set covfile=%buildDir%\moduletests.cov
 ```
 - exclude file (which we don't have yet) 
 ```cmd
@@ -126,23 +129,22 @@ set excludeFile=%myDir%\exclude.txt
 
 - Bullseye coverage behavior %COVCOPT%
     - top level directory for coverage output
-    - macro instrumentation on
+    - macro instrumentation activated
 ```cmd
 set covcopt=--srcdir %repoDir% --macro
 ```
 - desired coverage
-function,decision in %
+(function,decision in %)
 ```cmd
-set covMin=100,100
+set covMinima=100,100
 ```
 - exit status
 ```cmd
 set elevel=0
 ```
-- msbuild call
-    - could be called with any configuration
-    - separating instrumented and non instrumented builds saves a lot of clean builds
-    - see [remarks](##remarks)
+- msbuild call (sample)
+    - build can be called with any configuration
+    - separating instrumented and non instrumented build folders by configuration saves a lot of clean builds
 ```cmd
 set vsCall=msbuild -m %vsSolution% -p:configuration=bullseye
 ```
@@ -171,6 +173,16 @@ if %clean% == 1 (
 )
 ```
 ### build
+#### without coverage
+(see [remarks](##remarks))
+-   deactivate coverage instrumentation
+-   call ms build
+ ```cmd
+cov01 -q --off
+%vsCall% -t:submodules
+if %errorlevel% NEQ 0 goto err
+```
+#### coverage instrumented
 -   activate coverage instrumentation
 -   call ms build
 ```cmd
@@ -178,8 +190,7 @@ cov01 -q --on
 %vsCall% -t:"moduletests,moduletestsIL"
 if %errorlevel% NEQ 0 goto err
 ```
-- check if coverage file has been built
-(not really necessary)
+- check if coverage file has been built (not really necessary)
 ```cmd
 if not exist %covfile% (
     echo %covfile% not found
@@ -191,7 +202,7 @@ if not exist %covfile% (
 ```cmd
 covclear -q
 ```
-- run moduletests executables
+- run module tests executables
 ```cmd
 for %%t in (moduletests moduletestsIL) do (
     %exeDir%\%%t.exe
@@ -208,7 +219,7 @@ covselect -qd --import %excludeFile%
 cd %buildDir%
 ```
 -   write report
-    -   directory coverage _covdir_ in this sample
+    -   in this sample: _covdir_ for directory wise coverage output
     -   you might as well use:
         - _covsrc_ for source wise output
         - _covclass_ for class wise output
@@ -218,7 +229,7 @@ type %report%
 ```
 -   apply coverage minima reached check and save return for script exit
 ```cmd
-covdir -q --checkmin %covMin%
+covdir -q --checkmin %covMinima%
 set elevel=%errorlevel%
 ```
 -   if not passed: write todo report using _covbr_ 
@@ -243,8 +254,7 @@ run script
 - script will show error: missing exclude file
 - report contains everything 
 ```shell
-- report
-Exception: cannot open 'c:\git\DSTW98\make\coverage\exclude.txt': No such file or directory
+Exception: cannot open 'c:\git\DSTW98\scripts\coverage\exclude.txt': No such file or directory
 Directory                                               Function Coverage        C/D Coverage
 -----------------------------------------------------  ------------------  ------------------
 application/components/                                 184 /  184 = 100%   317 /  317 = 100%
@@ -298,12 +308,46 @@ application/components/SYS/        44 /  44 = 100%   65 /  65 = 100%
 application/components/SYS/src/    16 /  16 = 100%   59 /  59 = 100%
 application/components/TSW/         8 /   8 = 100%   22 /  22 = 100%
 application/components/TSW/src/     6 /   6 = 100%   22 /  22 = 100%
-specification/                     10 /  10 = 100%    0 /   0
+specification/                      8 /   8 = 100%    0 /   0
 specification/codebase/             2 /   2 = 100%    0 /   0
-specification/ifs/                  8 /   8 = 100%    0 /   0
+specification/ifs/                  6 /   6 = 100%    0 /   0
 -------------------------------  -----------------  ----------------
-Total                             194 / 194 = 100%  317 / 317 = 100%
+Total                             192 / 192 = 100%  317 / 317 = 100%
 ```
+## remarks
+### decent relative paths output
+Bullseye output is a bit tricky to handle.
+
+To achieve decent paths output with covdir or covsrc there are two options.
+1) change dir to coverage file location (as in our script)
+```cmd
+cd %buildDir%
+covdir -q --by-name > %report%
+```
+2) or change dir to application root (as set with %COVCOPT%) and use _--srcdir ._
+```cmd
+cd %repoDir%
+covdir -q --by-name --srcdir . > %report%
+```
+### exclude regions from instrumentation during build
+
+There is no actual need to exclude parts from instrumented build. 
+
+- What you can safely exclude:
+	- third party sources (like CppUtest) that you have linked as git submodules
+
+- What you should not exclude:
+	- your own test environment - you might finally want to check what was really used
+### HTML reports from CI pipelines
+There is no reason to generate and save HTML reports cause no one reads them.
+
+Required information:
+- coverage passed / failed
+- a basic overview (covdir / covsrc)
+- missing coverage (covbr)
+
+For test development you only need the coverage browser.
+
 ### appendix: the files
 -   the script
 ```cmd
@@ -311,22 +355,21 @@ Total                             194 / 194 = 100%  317 / 317 = 100%
 SETLOCAL
 cd /d %~dp0
 set myDir=%cd%
-cd ..
-set makeDir=%cd%
-cd ..
+cd ../..
 set repoDir=%cd%
-set buildDir=%cd%\build
-set reportsDir=%cd%\reports
+set buildDir=%repoDir%\build
+set reportsDir=%repoDir%\reports
+set vsDir=%repoDir%\vs
 set exeDir=%buildDir%\windows\bullseye
 
-set vsSolution=%makeDir%\DSTW.sln
-set report=%reportsDir%\coverage.txt
-set todoTxt=%reportsDir%\todo.txt
-set covfile=%buildDir%\coverage.cov
+set vsSolution=%vsDir%\DSTW.sln
+set report=%reportsDir%\moduletests_coverage.txt
+set todoTxt=%reportsDir%\moduletests_todo.txt
+set covfile=%buildDir%\moduletests.cov
 
 set covcopt=--srcdir %repoDir% --macro
 set excludeFile=%myDir%\exclude.txt
-set covMin=100,100
+set covMinima=100,100
 
 set vsCall=msbuild -m %vsSolution% -p:configuration=bullseye
 
@@ -344,6 +387,10 @@ if %clean% == 1 (
     %vsCall% -t:Clean
     DEL /Q %covfile% >NUL 2>&1
 )
+
+cov01 -q --off
+%vsCall% -t:submodules
+if %errorlevel% NEQ 0 goto err
 
 cov01 -q --on
 %vsCall% -t:"moduletests,moduletestsIL"
@@ -366,7 +413,7 @@ cd %buildDir%
 covdir -q --by-name > %report%
 type %report%
 
-covdir -q --checkmin %covMin%
+covdir -q --checkmin %covMinima%
 set elevel=%errorlevel%
 if %elevel% NEQ 0 covbr -qu -f %covfile% > %todoTxt%
 
@@ -383,37 +430,4 @@ goto end
 exclude all /
 include folder application/
 include folder specification/
-```
-## remarks
-### decent relative paths output
-Bullseye output is a bit tricky to handle.
-
-To achieve decent paths output with covdir or covsrc
-- change dir to coverage file location (as in our script)
-```cmd
-cd %buildDir%
-covdir -q --by-name > %report%
-```
-- or change dir to application root (as set with %COVCOPT%) and use --srcdir .
-```cmd
-cd %repoDir%
-covdir -q --by-name --srcdir . > %report%
-```
-### separation of binaries
-Using premake5 to generate the solutions separation can be achieved like this.
-```lua
-workspace 'DSTW'
-    configurations { 'ci', 'debug', 'memleak', 'bullseye', 'fail' }
-    language 'C++'
-    -- ../build/windows/obj/bullseye/
-    -- (config automatically added for objdir)
-    objdir  '../build/%{_TARGET_OS}/obj'
-    -- ../build/windows/lib/bullseye/
-    libdirs { '../build/%{_TARGET_OS}/lib/%{cfg.name}' }
-    filter { 'kind:ConsoleApp' }
-        -- ../build/windows/bullseye/
-        targetdir '../build/%{_TARGET_OS}/%{cfg.name}'
-    filter { 'kind:StaticLib' }
-        -- ../build/windows/lib/bullseye/
-        targetdir '../build/%{_TARGET_OS}/lib/%{cfg.name}'
 ```
