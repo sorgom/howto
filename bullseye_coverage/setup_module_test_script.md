@@ -45,14 +45,14 @@ repo
     -   implement
     -   run script
     -   view results in coverage browser
--   instrumentation state should not be changed after script run    
+-   instrumentation state should not be changed after script run
 #### pipelines e.g. Jenkins
--   Return code of script must mirror if desired coverage reached. 
+-   Return code of script must mirror if desired coverage reached.
     - 0 desired coverage reached
     - 1 otherwise
 -  A minimal text based reporting to be saved as artifact might be provided:
-	- coverage overview
-	- todo report
+    - coverage overview
+    - todo report
 ### for this sample
 -   code coverage required for
 ```
@@ -61,8 +61,8 @@ repo
 |   `-- components
 ```
 -   Two different test runs required for full coverage
-	-  moduletests (with mocked interface locator)
-	- moduletestsIL (to test the production interface locator)
+    -  moduletests (with mocked interface locator)
+    - moduletestsIL (to test the production interface locator)
 
 ## sample ms build solution _DSTW.sln_
 - submodules.vcxproj - static lib
@@ -116,13 +116,13 @@ set vsSolution=%vsDir%\DSTW.sln
 set report=%reportsDir%\moduletests_coverage.txt
 set todoTxt=%reportsDir%\moduletests_todo.txt
 ```
--   Bullseye coverage file: %COVFILE% 
+-   Bullseye coverage file: %COVFILE%
     -   can have any name
     -   extension _.cov_ makes sense - since assigned to coverage browser
 ```cmd
 set covfile=%buildDir%\moduletests.cov
 ```
-- exclude file (which we don't have yet) 
+- exclude file (which we don't have yet)
 ```cmd
 set excludeFile=%myDir%\exclude.txt
 ```
@@ -145,6 +145,7 @@ set elevel=0
 - msbuild call (sample)
     - build can be called with any configuration
     - separating instrumented and non instrumented build folders by configuration saves a lot of clean builds
+    - see also: [premake5 sample](../premake5/separate_binaries.md)
 ```cmd
 set vsCall=msbuild -m %vsSolution% -p:configuration=bullseye
 ```
@@ -232,7 +233,7 @@ type %report%
 covdir -q --checkmin %covMinima%
 set elevel=%errorlevel%
 ```
--   if not passed: write todo report using _covbr_ 
+-   if not passed: write todo report using _covbr_
 ```cmd
 if %elevel% NEQ 0 covbr -qu > %todoTxt%
 ```
@@ -252,7 +253,7 @@ goto end
 ## 1st run
 run script
 - script will show error: missing exclude file
-- report contains everything 
+- report contains everything
 ```shell
 Exception: cannot open 'c:\git\DSTW98\scripts\coverage\exclude.txt': No such file or directory
 Directory                                               Function Coverage        C/D Coverage
@@ -331,13 +332,13 @@ covdir -q --by-name --srcdir . > %report%
 ```
 ### exclude regions from instrumentation during build
 
-There is no actual need to exclude parts from instrumented build. 
+There is no actual need to exclude parts from instrumented build.
 
 - What you can safely exclude:
-	- third party sources (like CppUtest) that you have linked as git submodules
+    - third party sources (like CppUTest) that you have linked as git submodules
 
 - What you should not exclude:
-	- your own test environment - you might finally want to check what was really used
+    - your own test environment - you might finally want to check what was really used
 ### HTML reports from CI pipelines
 There is no reason to generate and save HTML reports cause no one reads them.
 
@@ -426,6 +427,11 @@ set elevel=1
 goto end
 ```
 -   the exclude file
+```
+exclude folder submodules/
+exclude folder testing/
+```
+or:
 ```
 exclude all /
 include folder application/
