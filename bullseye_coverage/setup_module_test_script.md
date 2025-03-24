@@ -79,7 +79,7 @@ application/components shall be the top level of reports output
 |   |-- CppUTestSteps
 |   `-- cpputest
 ```
-- moduletests.vcxproj - console app using submodules.lib
+- moduletests.vcxproj - console app depending on  submodules.lib
 ```
 |-- application
 |   |-- components
@@ -130,10 +130,9 @@ set excludeFile=%myDir%\exclude.txt
 ```cmd
 set COVCOPT=--srcdir %compDir% --macro
 ```
-- desired coverage
-(function,decision in %)
+- define project coverage goal (function,decision in %)
 ```cmd
-set covMinima=100,98
+set projectCoverageGoal=100,98
 ```
 - exit status
 ```cmd
@@ -168,18 +167,8 @@ if %clean% == 1 (
 )
 ```
 ### build
-#### without coverage
-(see [remarks](##remarks))
--   deactivate coverage instrumentation
--   call ms build
- ```cmd
-cov01 -q --off
-%buildCall% -t:submodules
-if %errorlevel% NEQ 0 goto err
-```
-#### coverage instrumented
 -   activate coverage instrumentation
--   call ms build
+-   call build
 ```cmd
 cov01 -q --on
 %buildCall% -t:moduletests
@@ -220,12 +209,14 @@ cd %buildDir%
 covdir -q --by-name > %report%
 type %report%
 ```
--   apply coverage minima reached check and save return for script exit
+-   apply project coverage goal reached check 
+	- save return for script exit
 ```cmd
-covdir -q --checkmin %covMinima%
+covdir -q --checkmin %projectCoverageGoal%
 set elevel=%errorlevel%
 ```
--   if not 100% coverage - write todo report using _covbr_ (see [appendix](##appendix))
+-   apply 100% coverage reached check
+	-  write todo report using _covbr_ if not reached (see [appendix](##appendix)) 
 ```cmd
 covdir -q --checkmin 100,100
 if %errorlevel% NEQ 0 covbr -qu > %todoTxt%
@@ -251,28 +242,28 @@ run script
 
 ```shell
 Exception: cannot open 'c:\git\DSTW98\scripts\coverage\exclude.txt': No such file or directory
-Directory                                 Function Coverage        C/D Coverage
-----------------------------------------  -----------------  ------------------
-../../                                     345 / 519 =  66%   312 / 1001 =  31%
-../../specification/ifs/                     6 /   6 = 100%     0 /    0
-../../submodules/                            7 / 149 =   4%     0 /    6 =   0%
-../../testing/                             332 / 364 =  91%   312 /  995 =  31%
-../../testing/testenv/                     197 / 227 =  86%    36 /   58 =  60%
-../../testing/tests/moduletests/           135 / 137 =  98%   276 /  937 =  29%
-BAS/                                        43 /  43 = 100%    32 /   32 = 100%
-BAS/src/                                     7 /   7 = 100%     0 /    0
-COM/                                        51 /  51 = 100%    70 /   70 = 100%
-COM/src/                                    40 /  40 = 100%    70 /   70 = 100%
-LCR/                                        12 /  12 = 100%    37 /   37 = 100%
-LCR/src/                                     7 /   7 = 100%    37 /   37 = 100%
-SIG/                                        26 /  26 = 100%    91 /   91 = 100%
-SIG/src/                                    19 /  19 = 100%    91 /   91 = 100%
-SYS/                                        32 /  32 = 100%    65 /   65 = 100%
-SYS/src/                                    16 /  16 = 100%    59 /   59 = 100%
-TSW/                                         8 /   8 = 100%    22 /   22 = 100%
-TSW/src/                                     6 /   6 = 100%    22 /   22 = 100%
-----------------------------------------  -----------------  ------------------
-Total                                      517 / 691 =  74%   629 / 1318 =  47%
+Directory                         Function Coverage        C/D Coverage
+-------------------------------- ------------------  ------------------
+../../                            707 / 1986 =  35%   658 / 3315 =  19%
+../../specification/ifs/            6 /    6 = 100%     0 /    0
+../../submodules/                 369 / 1616 =  22%   346 / 2320 =  14%
+../../testing/                    332 /  364 =  91%   312 /  995 =  31%
+../../testing/testenv/            197 /  227 =  86%    36 /   58 =  62%
+../../testing/tests/moduletests/  135 /  137 =  98%   276 /  937 =  29%
+BAS/                               43 /   43 = 100%    32 /   32 = 100%
+BAS/src/                            7 /    7 = 100%     0 /    0
+COM/                               51 /   51 = 100%    70 /   70 = 100%
+COM/src/                           40 /   40 = 100%    70 /   70 = 100%
+LCR/                               12 /   12 = 100%    37 /   37 = 100%
+LCR/src/                            7 /    7 = 100%    37 /   37 = 100%
+SIG/                               26 /   26 = 100%    91 /   91 = 100%
+SIG/src/                           19 /   19 = 100%    91 /   91 = 100%
+SYS/                               32 /   32 = 100%    65 /   65 = 100%
+SYS/src/                           16 /   16 = 100%    59 /   59 = 100%
+TSW/                                8 /    8 = 100%    22 /   22 = 100%
+TSW/src/                            6 /    6 = 100%    22 /   22 = 100%
+-------------------------------- ------------------  ------------------
+Total                             879 / 2158 =  40%   975 / 3632 =  26%
 
 C:\git\DSTW98>echo %errorlevel%
 1
@@ -328,7 +319,6 @@ C:\git\DSTW98>echo %errorlevel%
 ### the files
 Find script and exclude file at the [DSTW98 repo](https://github.com/sorgom/DSTW98/tree/SOM_DEVEL/scripts/coverage).
 
-
 ## remarks
 ### decent relative paths output
 Bullseye output is a bit tricky to handle.
@@ -344,20 +334,6 @@ covdir -q --by-name > %report%
 cd %compDir%
 covdir -q --by-name --srcdir . > %report%
 ```
-### exclude regions from instrumentation during build
-
-There is no actual need to exclude parts from instrumented build.
-
-- What you can safely exclude:
-    - third party sources (like CppUTest) that you have linked as git submodules
-
-- What you should not exclude:
-    - your own test environment - you might finally want to check what was really used
-
-![include testenv](07_include_testenv.png)
-
-![testenv coverage](08_testenv_coverage.png)
-
 ### HTML reports from CI pipelines
 
 There is no reason to generate and save HTML reports cause no one reads them.
