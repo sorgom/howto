@@ -1,38 +1,46 @@
 # how to setup a script to run module tests with Bullseye coverage
 Windows CMD sample
-
 ## preconditions
 -   install MS build tools or Visual Studio
 -   and then install Bullseye coverage
-
 ## sample project _DSTW98_
 ```
 repo
-|-- specification
 |-- application
 |   |-- components
+|   |   |-- BAS
+|   |   |-- CFG
+|   |   |-- COM
+|   |   |-- LCR
+|   |   |-- SIG
+|   |   |-- SYS
+|   |   `-- TSW
 |   `-- main
-|       `-- AppMain.cpp
-|
-|-- testing
-|   |-- testenv
-|   `-- tests
-|       |-- moduletests
-|       |-- moduletestsIL
-|       `-- systemtests
 |
 |-- scripts
-|   `-- coverage
-|       |-- moduletests.cmd (our script)
-|       `-- exclude.txt
+|   |-- coverage
+|   |   |-- exclude.txt
+|   |   `-- moduletests.cmd (our script)
+|   ...
 |
 |-- submodules
 |   |-- CppUTestSteps
-|   `-- cpputest
+|   |-- cpputest
+|   ...
+|
+|-- testing
+|   |-- testenv
+|   |-- tests
+|       |-- moduletests
+|       |-- systemtests
+|       ...
 |
 |-- vs
 |   |-- DSTW.sln
-|   `-- *.vcxporj
+|   |-- submodules.vcxproj
+|   |-- moduletests.vcxproj
+|   |-- systemtests.vcxproj
+|   ...
 |
 | temporary:
 |-- build
@@ -54,18 +62,16 @@ repo
     - coverage overview
     - todo report
 ### for this sample
+
 -   code coverage required for
 ```
-|-- specification
 |-- application
-|   `-- components
+|   |-- components
 ```
--   Two different test runs required for full coverage
-    -  moduletests (with mocked interface locator)
-    - moduletestsIL (to test the production interface locator)
 
+application/components shall be the top level of reports output
 ## sample ms build solution _DSTW.sln_
-- submodules.vcxproj - static lib
+- submodules.vcxproj - static lib (for module tests and system tests)
 ```
 |-- submodules
 |   |-- CppUTestSteps
@@ -73,25 +79,13 @@ repo
 ```
 - moduletests.vcxproj - console app using submodules.lib
 ```
-|-- specification
 |-- application
-|   `-- components
+|   |-- components
 |
 |-- testing
 |   |-- testenv
-|   `-- tests
+|   |-- tests
 |       `-- moduletests
-```
-- moduletestsIL.vcxproj - console app using submodules.lib
-```
-|-- specification
-|-- application
-|   `-- components
-|
-|-- testing
-|   |-- testenv
-|   `-- tests
-|       `-- moduletestsIL
 ```
 ## setting up the script step by step
 
@@ -105,12 +99,13 @@ set myDir=%cd%
 cd ../..
 set repoDir=%cd%
 set buildDir=%repoDir%\build
+set compDir=%repoDir%\application\components
 set reportsDir=%repoDir%\reports
 set vsDir=%repoDir%\vs
-set exeDir=%buildDir%\windows\bullseye
+set exeDir=%buildDir%\windows\release
 ```
-- solution and reporting files
 
+- solution and reporting files
 ```cmd
 set vsSolution=%vsDir%\DSTW.sln
 set report=%reportsDir%\moduletests_coverage.txt
@@ -120,7 +115,7 @@ set todoTxt=%reportsDir%\moduletests_todo.txt
     -   can have any name
     -   extension _.cov_ makes sense - since assigned to coverage browser
 ```cmd
-set covfile=%buildDir%\moduletests.cov
+set COVFILE=%buildDir%\moduletests.cov
 ```
 - exclude file (which we don't have yet)
 ```cmd
@@ -131,23 +126,20 @@ set excludeFile=%myDir%\exclude.txt
     - top level directory for coverage output
     - macro instrumentation activated
 ```cmd
-set covcopt=--srcdir %repoDir% --macro
+set COVCOPT=--srcdir %compDir% --macro
 ```
 - desired coverage
 (function,decision in %)
 ```cmd
-set covMinima=100,100
+set covMinima=100,98
 ```
 - exit status
 ```cmd
 set elevel=0
 ```
-- msbuild call (sample)
-    - build can be called with any configuration
-    - separating instrumented and non instrumented build folders by configuration saves a lot of clean builds
-    - see also: [premake5 sample](../premake5/separate_binaries.md)
+- msbuild call (build can be called with any configuration)
 ```cmd
-set vsCall=msbuild -m %vsSolution% -p:configuration=bullseye
+set buildCall=msbuild -m %vsSolution% -p:configuration=release
 ```
 -   provide temporary folders
 -   remove old reports
@@ -170,7 +162,7 @@ if "%1" == "-c" set clean=1
 
 if %clean% == 1 (
     DEL /Q %covfile% >NUL 2>&1
-    %vsCall% -t:Clean
+    %buildCall% -t:Clean
 )
 ```
 ### build
@@ -180,7 +172,7 @@ if %clean% == 1 (
 -   call ms build
  ```cmd
 cov01 -q --off
-%vsCall% -t:submodules
+%buildCall% -t:submodules
 if %errorlevel% NEQ 0 goto err
 ```
 #### coverage instrumented
@@ -188,7 +180,7 @@ if %errorlevel% NEQ 0 goto err
 -   call ms build
 ```cmd
 cov01 -q --on
-%vsCall% -t:"moduletests,moduletestsIL"
+%buildCall% -t:moduletests
 if %errorlevel% NEQ 0 goto err
 ```
 - check if coverage file has been built (not really necessary)
@@ -203,12 +195,10 @@ if not exist %covfile% (
 ```cmd
 covclear -q
 ```
-- run module tests executables
+- run module test executable
 ```cmd
-for %%t in (moduletests moduletestsIL) do (
-    %exeDir%\%%t.exe
-    if %errorlevel% NEQ 0 goto err
-)
+%exeDir%\moduletests.exe
+if %errorlevel% NEQ 0 goto err
 ```
 ### report
 -   apply exclude file (which we don't have at 1st run)
@@ -233,9 +223,10 @@ type %report%
 covdir -q --checkmin %covMinima%
 set elevel=%errorlevel%
 ```
--   if not passed: write todo report using _covbr_
+-   if not 100% coverage - write todo report using _covbr_ (see [appendix](##appendix))
 ```cmd
-if %elevel% NEQ 0 covbr -qu > %todoTxt%
+covdir -q --checkmin 100,100
+if %errorlevel% NEQ 0 covbr -qu > %todoTxt%
 ```
 -   restore previous instrumentation state
 -   exit with coverage passed value
@@ -254,19 +245,35 @@ goto end
 run script
 - script will show error: missing exclude file
 - report contains everything
+- coverage minima not reached
+
 ```shell
 Exception: cannot open 'c:\git\DSTW98\scripts\coverage\exclude.txt': No such file or directory
-Directory                                               Function Coverage        C/D Coverage
------------------------------------------------------  ------------------  ------------------
-application/components/                                 184 /  184 = 100%   317 /  317 = 100%
-...
-specification/                                           10 /   10 = 100%     0 /    0
-...
-submodules/                                             369 / 1616 =  22%   346 / 2320 =  14%
-...
-testing/                                                334 /  367 =  91%   338 / 1093 =  30%
------------------------------------------------------  ------------------  ------------------
-Total                                                   897 / 2177 =  41%  1001 / 3730 =  26%
+Directory                                 Function Coverage        C/D Coverage
+----------------------------------------  -----------------  ------------------
+../../                                     345 / 519 =  66%   312 / 1001 =  31%
+../../specification/ifs/                     6 /   6 = 100%     0 /    0
+../../submodules/                            7 / 149 =   4%     0 /    6 =   0%
+../../testing/                             332 / 364 =  91%   312 /  995 =  31%
+../../testing/testenv/                     197 / 227 =  86%    36 /   58 =  60%
+../../testing/tests/moduletests/           135 / 137 =  98%   276 /  937 =  29%
+BAS/                                        43 /  43 = 100%    32 /   32 = 100%
+BAS/src/                                     7 /   7 = 100%     0 /    0
+COM/                                        51 /  51 = 100%    70 /   70 = 100%
+COM/src/                                    40 /  40 = 100%    70 /   70 = 100%
+LCR/                                        12 /  12 = 100%    37 /   37 = 100%
+LCR/src/                                     7 /   7 = 100%    37 /   37 = 100%
+SIG/                                        26 /  26 = 100%    91 /   91 = 100%
+SIG/src/                                    19 /  19 = 100%    91 /   91 = 100%
+SYS/                                        32 /  32 = 100%    65 /   65 = 100%
+SYS/src/                                    16 /  16 = 100%    59 /   59 = 100%
+TSW/                                         8 /   8 = 100%    22 /   22 = 100%
+TSW/src/                                     6 /   6 = 100%    22 /   22 = 100%
+----------------------------------------  -----------------  ------------------
+Total                                      517 / 691 =  74%   629 / 1318 =  47%
+
+C:\git\DSTW98>echo %errorlevel%
+1
 ```
 
 ## setup exclude file with coverage browser
@@ -276,7 +283,7 @@ Total                                                   897 / 2177 =  41%  1001 
 
 ![coverage](02_coverage.png)
 ### exclude regions of no interest from coverage
-- (right click, context menu)
+- (right click, context menu, Exclude)
 
 ![exclude](03_exclude_1.png)
 
@@ -291,29 +298,29 @@ Total                                                   897 / 2177 =  41%  1001 
 ## 2nd run
 run script
 - script should not show an error
-- report contains desired regions
+- report contains desired regions only
+- coverage minima reached
 
 ```shell
-Directory                        Function Coverage      C/D Coverage
--------------------------------  -----------------  ----------------
-application/components/           184 / 184 = 100%  317 / 317 = 100%
-application/components/BAS/        43 /  43 = 100%   32 /  32 = 100%
-application/components/BAS/src/     7 /   7 = 100%    0 /   0
-application/components/COM/        51 /  51 = 100%   70 /  70 = 100%
-application/components/COM/src/    40 /  40 = 100%   70 /  70 = 100%
-application/components/LCR/        12 /  12 = 100%   37 /  37 = 100%
-application/components/LCR/src/     7 /   7 = 100%   37 /  37 = 100%
-application/components/SIG/        26 /  26 = 100%   91 /  91 = 100%
-application/components/SIG/src/    19 /  19 = 100%   91 /  91 = 100%
-application/components/SYS/        44 /  44 = 100%   65 /  65 = 100%
-application/components/SYS/src/    16 /  16 = 100%   59 /  59 = 100%
-application/components/TSW/         8 /   8 = 100%   22 /  22 = 100%
-application/components/TSW/src/     6 /   6 = 100%   22 /  22 = 100%
-specification/                      8 /   8 = 100%    0 /   0
-specification/codebase/             2 /   2 = 100%    0 /   0
-specification/ifs/                  6 /   6 = 100%    0 /   0
--------------------------------  -----------------  ----------------
-Total                             192 / 192 = 100%  317 / 317 = 100%
+Directory  Function Coverage      C/D Coverage
+---------  -----------------  ----------------
+BAS/         43 /  43 = 100%   32 /  32 = 100%
+BAS/src/      7 /   7 = 100%    0 /   0
+COM/         51 /  51 = 100%   70 /  70 = 100%
+COM/src/     40 /  40 = 100%   70 /  70 = 100%
+LCR/         12 /  12 = 100%   37 /  37 = 100%
+LCR/src/      7 /   7 = 100%   37 /  37 = 100%
+SIG/         26 /  26 = 100%   91 /  91 = 100%
+SIG/src/     19 /  19 = 100%   91 /  91 = 100%
+SYS/         32 /  32 = 100%   65 /  65 = 100%
+SYS/src/     16 /  16 = 100%   59 /  59 = 100%
+TSW/          8 /   8 = 100%   22 /  22 = 100%
+TSW/src/      6 /   6 = 100%   22 /  22 = 100%
+---------  -----------------  ----------------
+Total       172 / 172 = 100%  317 / 317 = 100%
+
+C:\git\DSTW98>echo %errorlevel%
+0
 ```
 ## remarks
 ### decent relative paths output
@@ -327,7 +334,7 @@ covdir -q --by-name > %report%
 ```
 2) or change dir to application root (as set with %COVCOPT%) and use _--srcdir ._
 ```cmd
-cd %repoDir%
+cd %compDir%
 covdir -q --by-name --srcdir . > %report%
 ```
 ### exclude regions from instrumentation during build
@@ -339,7 +346,13 @@ There is no actual need to exclude parts from instrumented build.
 
 - What you should not exclude:
     - your own test environment - you might finally want to check what was really used
+
+![include testenv](07_include_testenv.png)
+
+![testenv coverage](08_testenv_coverage.png)
+
 ### HTML reports from CI pipelines
+
 There is no reason to generate and save HTML reports cause no one reads them.
 
 Required information:
@@ -348,8 +361,44 @@ Required information:
 - missing coverage (covbr)
 
 For test development you only need the coverage browser.
+## appendix 
+### sample _covbr_ output with missing coverage
 
-### appendix: the files
+```
+...
+c:/git/DSTW98/application/components/SYS/Provider.h:
+c:/git/DSTW98/application/components/SYS/Reader.h:
+  ...
+       11 {
+       12 public:
+       13     void read();
+-->    14     inline const ComSetup& getComSetup() const { return mComSetup; }
+       15
+       16     INSTANCE_DEC(Reader)
+       17     NOCOPY(Reader)
+       18 private:
+       19     ComSetup mComSetup;
+-->    20     inline Reader() {}
+       21 };
+       22 #endif // _H
+c:/git/DSTW98/application/components/SYS/src/Ctrl.cpp:
+  ...
+        4 #include <algorithm>
+        5 #include <iostream>
+        6
+-->     7 INSTANCE_DEF(Ctrl)
+        8
+-->     9 void Ctrl::log(E_Comp, E_Err ret)
+       10 {
+       11     mErr = maxv(mErr, ret);
+       12 }
+c:/git/DSTW98/application/components/SYS/src/Main.cpp:
+c:/git/DSTW98/application/components/SYS/src/Mapper.cpp:
+...
+```
+
+### the files
+
 -   the script
 ```cmd
 @echo off
@@ -359,20 +408,21 @@ set myDir=%cd%
 cd ../..
 set repoDir=%cd%
 set buildDir=%repoDir%\build
+set compDir=%repoDir%\application\components
 set reportsDir=%repoDir%\reports
 set vsDir=%repoDir%\vs
-set exeDir=%buildDir%\windows\bullseye
+set exeDir=%buildDir%\windows\release
 
 set vsSolution=%vsDir%\DSTW.sln
 set report=%reportsDir%\moduletests_coverage.txt
 set todoTxt=%reportsDir%\moduletests_todo.txt
-set covfile=%buildDir%\moduletests.cov
+set COVFILE=%buildDir%\moduletests.cov
 
-set covcopt=--srcdir %repoDir% --macro
+set COVCOPT=--srcdir %compDir% --macro
 set excludeFile=%myDir%\exclude.txt
-set covMinima=100,100
+set covMinima=100,98
 
-set vsCall=msbuild -m %vsSolution% -p:configuration=bullseye
+set buildCall=msbuild -m %vsSolution% -p:configuration=release
 
 set elevel=0
 
@@ -382,31 +432,29 @@ DEL /Q %report% %todoTxt% >NUL 2>&1
 cov01 -q --push
 
 set clean=0
-if not exist %covfile% set clean=1
+if not exist %COVFILE% set clean=1
 if "%1" == "-c" set clean=1
 if %clean% == 1 (
-    %vsCall% -t:Clean
-    DEL /Q %covfile% >NUL 2>&1
+    %buildCall% -t:Clean
+    DEL /Q %COVFILE% >NUL 2>&1
 )
 
 cov01 -q --off
-%vsCall% -t:submodules
+%buildCall% -t:submodules
 if %errorlevel% NEQ 0 goto err
 
 cov01 -q --on
-%vsCall% -t:"moduletests,moduletestsIL"
+%buildCall% -t:moduletests
 if %errorlevel% NEQ 0 goto err
 
-if not exist %covfile% (
-    echo %covfile% not found
+if not exist %COVFILE% (
+    echo %COVFILE% not found
     goto err
 )
 
 covclear -q
-for %%t in (moduletests moduletestsIL) do (
-    %exeDir%\%%t.exe
-    if %errorlevel% NEQ 0 goto err
-)
+%exeDir%\moduletests.exe
+if %errorlevel% NEQ 0 goto err
 
 covselect -qd --import %excludeFile%
 
@@ -416,7 +464,9 @@ type %report%
 
 covdir -q --checkmin %covMinima%
 set elevel=%errorlevel%
-if %elevel% NEQ 0 covbr -qu -f %covfile% > %todoTxt%
+
+covdir -q --checkmin 100,100
+if %errorlevel% NEQ 0 covbr -qu > %todoTxt%
 
 :end
 cov01 -q --pop
@@ -426,14 +476,10 @@ exit /b %elevel%
 set elevel=1
 goto end
 ```
+
 -   the exclude file
 ```
-exclude folder submodules/
-exclude folder testing/
-```
-or:
-```
-exclude all /
-include folder application/
-include folder specification/
+exclude folder ../../testing/
+exclude folder ../../submodules/
+exclude folder ../../specification/
 ```
