@@ -43,7 +43,7 @@ apt-get upgrade -y python3
 ## Remove distro from wsl
 Note: de-installation of the Linux does not remove the wsl virtual drive data of the distro (approx 7 GB):
 - open a shell (command prompt)
-- list distros: _wsl --list --all_
+- list distros: _wsl --list --all_ or _wsl -l_
 ```
 C:\Users\MS>wsl --list --all
 Windows Subsystem für Linux-Distributionen:
@@ -59,8 +59,18 @@ Der Vorgang wurde erfolgreich beendet.
 ```
 - check success
 ```
-C:\Users\MS>wsl --list --all
+C:\Users\MS>wsl -l
 Windows Subsystem für Linux-Distributionen:
 docker-desktop (Standard)
 Debian
+```
+- change default if desired: _wsl --setdefault_ distro
+```
+wsl --setdefault Debian
+Der Vorgang wurde erfolgreich beendet.
+
+C:\Users\MS>wsl -l
+Windows Subsystem für Linux-Distributionen:
+Debian (Standard)
+docker-desktop
 ```
